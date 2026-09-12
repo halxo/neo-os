@@ -28,6 +28,14 @@ detect_cpu_level() {
 }
 CPU_LEVEL="$(detect_cpu_level)"
 
+neoos_repo() {
+    printf '[neoos]
+SigLevel = Optional TrustAll
+Server = https://raw.githubusercontent.com/halxo/neo-os/main/repo/$arch
+
+'
+}
+
 arch_repos() {
     for repo in core extra multilib; do
         printf '[%s]\nInclude = /etc/pacman.d/mirrorlist\n\n' "$repo"
@@ -54,6 +62,7 @@ render() {
         x86-64-v2) printf ' x86_64_v2' ;;
     esac
     printf '\n\n' 
+    neoos_repo
     if [[ "$MODE" == arch ]]; then
         arch_repos
         # Keep the live ISO and Arch-first installs on baseline Arch packages.
