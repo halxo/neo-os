@@ -243,3 +243,4 @@ lib32-libxrandr
 lib32-libxss
 lib32-nss
 shelly
+curl

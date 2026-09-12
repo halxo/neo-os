@@ -36,3 +36,4 @@ archlinux-keyring
 plymouth
 shelly
 firefox
+curl

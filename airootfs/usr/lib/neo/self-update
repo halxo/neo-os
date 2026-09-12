@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="https://raw.githubusercontent.com/halxo/neo-os/main"
+TMP="$(mktemp -d)"
+
+trap 'rm -rf "$TMP"' EXIT
+
+echo "==> Checking NeoOS files from GitHub..."
+
+download() {
+    local remote="$1"
+    local target="$2"
+    local mode="${3:-644}"
+
+    mkdir -p "$(dirname "$target")"
+
+    curl -fsSL \
+        "$REPO/$remote" \
+        -o "$TMP/file"
+
+    install -m "$mode" "$TMP/file" "$target"
+}
+
+# NeoOS repo management backend
+download \
+    "airootfs/usr/lib/neo/configure-repositories" \
+    "/usr/lib/neo/configure-repositories" \
+    755
+
+# NeoOS Plasma branding helper
+download \
+    "airootfs/usr/lib/neo/configure-plasma-branding" \
+    "/usr/lib/neo/configure-plasma-branding" \
+    755
+
+# Add more NeoOS-owned files here later.
+
+echo "==> NeoOS components updated successfully."
