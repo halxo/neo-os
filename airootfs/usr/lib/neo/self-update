@@ -1,39 +1,117 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="https://raw.githubusercontent.com/halxo/neo-os/main"
-TMP="$(mktemp -d)"
+RAW="https://raw.githubusercontent.com/halxo/neo-os/main"
 
+LOCAL_VERSION_FILE="/usr/share/neoos/version"
+
+TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "==> Checking NeoOS files from GitHub..."
+echo "==> Checking for NeoOS updates..."
 
-download() {
-    local remote="$1"
-    local target="$2"
-    local mode="${3:-644}"
+REMOTE_VERSION="$(
+    curl -fsSL "$RAW/NEOOS_VERSION" |
+    tr -d '\r\n'
+)"
 
-    mkdir -p "$(dirname "$target")"
+if [[ -f "$LOCAL_VERSION_FILE" ]]; then
+    LOCAL_VERSION="$(cat "$LOCAL_VERSION_FILE")"
+else
+    LOCAL_VERSION="0.0.0"
+fi
+
+echo "Installed: $LOCAL_VERSION"
+echo "Available: $REMOTE_VERSION"
+
+if [[ "$LOCAL_VERSION" == "$REMOTE_VERSION" ]]; then
+    echo "==> NeoOS is already up to date."
+    exit 0
+fi
+
+NEWEST="$(
+    printf '%s\n%s\n' "$LOCAL_VERSION" "$REMOTE_VERSION" |
+    sort -V |
+    tail -n1
+)"
+
+if [[ "$NEWEST" != "$REMOTE_VERSION" ]]; then
+    echo "==> Installed NeoOS version is newer than GitHub."
+    exit 0
+fi
+
+echo "==> Downloading signed update manifest..."
+
+curl -fsSL \
+    "$RAW/neoos-update-manifest.sha256" \
+    -o "$TMP/manifest.sha256"
+
+cd "$TMP"
+
+while read -r HASH FILE; do
+    [[ -z "$HASH" || -z "$FILE" ]] && continue
+
+    case "$FILE" in
+        airootfs/*)
+            ;;
+        *)
+            echo "ERROR: Invalid update path:"
+            echo "$FILE"
+            exit 1
+            ;;
+    esac
+
+    echo "==> Downloading $FILE"
+
+    mkdir -p "$(dirname "$FILE")"
 
     curl -fsSL \
-        "$REPO/$remote" \
-        -o "$TMP/file"
+        "$RAW/$FILE" \
+        -o "$FILE"
 
-    install -m "$mode" "$TMP/file" "$target"
-}
+    ACTUAL="$(
+        sha256sum "$FILE" |
+        awk '{print $1}'
+    )"
 
-# NeoOS repo management backend
-download \
-    "airootfs/usr/lib/neo/configure-repositories" \
-    "/usr/lib/neo/configure-repositories" \
-    755
+    if [[ "$ACTUAL" != "$HASH" ]]; then
+        echo
+        echo "ERROR: SHA-256 verification failed!"
+        echo "File:     $FILE"
+        echo "Expected: $HASH"
+        echo "Received: $ACTUAL"
+        echo
+        echo "Nothing has been installed."
+        exit 1
+    fi
+done < manifest.sha256
 
-# NeoOS Plasma branding helper
-download \
-    "airootfs/usr/lib/neo/configure-plasma-branding" \
-    "/usr/lib/neo/configure-plasma-branding" \
-    755
+echo "==> All files passed SHA-256 verification."
 
-# Add more NeoOS-owned files here later.
+while read -r HASH FILE; do
+    [[ -z "$HASH" || -z "$FILE" ]] && continue
 
-echo "==> NeoOS components updated successfully."
+    TARGET="/${FILE#airootfs/}"
+
+    echo "==> Installing $TARGET"
+
+    mkdir -p "$(dirname "$TARGET")"
+
+    case "$TARGET" in
+        /usr/lib/neo/*|/usr/bin/*)
+            install -m755 "$FILE" "$TARGET"
+            ;;
+
+        *)
+            install -m644 "$FILE" "$TARGET"
+            ;;
+    esac
+done < manifest.sha256
+
+mkdir -p "$(dirname "$LOCAL_VERSION_FILE")"
+
+printf '%s\n' "$REMOTE_VERSION" > "$LOCAL_VERSION_FILE"
+
+echo
+echo "==> NeoOS updated successfully."
+echo "    $LOCAL_VERSION -> $REMOTE_VERSION"

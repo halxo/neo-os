@@ -1,0 +1,3 @@
+airootfs/usr/lib/neo/configure-repositories
+airootfs/usr/lib/neo/configure-plasma-branding
+airootfs/usr/lib/neo/self-update
