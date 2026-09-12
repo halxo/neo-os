@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=NeoOS
+Description=NeoOS boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/neoos
+ScriptFile=/usr/share/plymouth/themes/neoos/neoos.script

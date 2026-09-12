@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Neo
+Comment=Configure NeoOS
+Exec=neo-gui
+Icon=neoos
+Terminal=false
+Type=Application
+Categories=Settings;System;
+Keywords=NeoOS;Arch;CachyOS;Repositories;Packages;

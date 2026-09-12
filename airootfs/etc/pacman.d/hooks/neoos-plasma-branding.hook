@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/plasma/layout-templates/org.kde.plasma.desktop.defaultPanel/contents/layout.js
+
+[Action]
+Description = Restoring the NeoOS Plasma launcher icon...
+When = PostTransaction
+# pacstrap can inherit the live host's hooks before the target overlay exists.
+Exec = /bin/sh -c "if [ -x /usr/lib/neo/configure-plasma-branding ]; then exec /usr/lib/neo/configure-plasma-branding; fi"

@@ -1,0 +1,48 @@
+---
+modules-search: [ local, /usr/lib/calamares/modules ]
+
+instances:
+  - id: cleanup
+    module: shellprocess
+    config: shellprocess@cleanup.conf
+
+sequence:
+  - show:
+      - welcome
+      - locale
+      - keyboard
+      - partition
+      - users
+      - summary
+
+  - exec:
+      - partition
+      - mount
+      - unpackfs
+      - shellprocess@cleanup
+      - machineid
+      - fstab
+      - locale
+      - keyboard
+      - users
+      - displaymanager
+      - initcpiocfg
+      - initcpio
+      - bootloader
+      - services-systemd
+      - umount
+
+  - show:
+      - finished
+
+branding: neoos
+
+prompt-install: false
+dont-chroot: false
+oem-setup: false
+
+disable-cancel: false
+disable-cancel-during-exec: true
+hide-back-and-next-during-exec: false
+
+quit-at-end: false

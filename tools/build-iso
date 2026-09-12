@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+PROFILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+for tool in mkarchiso repo-add pacman-conf; do
+    command -v "$tool" >/dev/null || { echo "Missing build tool: $tool" >&2; exit 1; }
+done
+# Keep a self-contained, unsigned local repo; remote packages still require signatures.
+repo-add "$PROFILE/localrepo/neoos.db.tar.gz" "$PROFILE"/localrepo/*.pkg.tar.zst
+CONFIG="$(mktemp "$PROFILE/.build-pacman.XXXXXX")"
+trap 'rm -f "$CONFIG"' EXIT
+sed "s|@NEOOS_LOCAL_REPO@|$PROFILE/localrepo|g" "$PROFILE/pacman.conf" > "$CONFIG"
+# Fail early if the host has not imported the CachyOS signing keys.
+if [[ ! -f /usr/share/pacman/keyrings/cachyos.gpg ]]; then
+    echo 'Install and populate cachyos-keyring on the build host first; see README.md.' >&2
+    exit 1
+fi
+# A unique work directory avoids stale mkarchiso stage markers after profile edits.
+WORK="$(mktemp -d "$PROFILE/work-build.XXXXXX")"
+mkarchiso -v -C "$CONFIG" -w "$WORK" -o "$PROFILE/out" "$@" "$PROFILE"

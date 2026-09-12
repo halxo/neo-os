@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -e
+
+DESKTOP="/usr/share/applications/calamares.desktop"
+
+if [[ -f "$DESKTOP" ]]; then
+    sed -i \
+        -e 's/^Name=.*/Name=Neo Install/' \
+        -e 's/^GenericName=.*/GenericName=NeoOS System Installer/' \
+        -e 's/^Comment=.*/Comment=Install NeoOS on your computer/' \
+        -e 's/^Icon=.*/Icon=neo-install/' \
+        "$DESKTOP"
+fi

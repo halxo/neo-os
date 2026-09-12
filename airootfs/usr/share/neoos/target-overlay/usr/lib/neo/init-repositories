@@ -1,0 +1,18 @@
+#!/bin/bash
+set -euo pipefail
+
+MODE="arch"
+
+if [[ -f /etc/neo/repository-mode.conf ]]; then
+    SAVED_MODE="$(sed -n 's/^mode=//p' /etc/neo/repository-mode.conf | head -n1)"
+
+    case "$SAVED_MODE" in
+        arch|cachyos)
+            MODE="$SAVED_MODE"
+            ;;
+    esac
+fi
+
+echo "Initializing NeoOS repositories in $MODE mode"
+
+/usr/lib/neo/configure-repositories "$MODE"

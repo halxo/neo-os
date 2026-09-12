@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = calamares
+
+[Action]
+Description = Branding Calamares as Neo Install...
+When = PostTransaction
+Exec = /usr/lib/neo/brand-calamares

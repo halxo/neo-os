@@ -1,0 +1,5 @@
+---
+type: "job"
+name: "neoinstall"
+interface: "python"
+script: "main.py"

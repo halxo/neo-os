@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+WORK="/mnt/neoos-work"
+RAM_OUT="/mnt/neoos-output"
+DISK_OUT="$PWD/out"
+
+echo "==> Preparing RAM build directories..."
+
+sudo mkdir -p "$WORK" "$RAM_OUT"
+
+if ! mountpoint -q "$WORK"; then
+    sudo mount -t tmpfs -o size=16G tmpfs "$WORK"
+fi
+
+if ! mountpoint -q "$RAM_OUT"; then
+    sudo mount -t tmpfs -o size=6G tmpfs "$RAM_OUT"
+fi
+
+echo "==> Cleaning previous RAM build..."
+sudo rm -rf "$WORK"/*
+sudo rm -rf "$RAM_OUT"/*
+
+echo "==> Building NeoOS entirely in RAM..."
+sudo mkarchiso -v \
+    -w "$WORK" \
+    -o "$RAM_OUT" \
+    .
+
+echo "==> Copying finished ISO to disk..."
+mkdir -p "$DISK_OUT"
+
+find "$DISK_OUT" -maxdepth 1 -type f \
+    \( -name 'neoos-*.iso' -o -name 'neoos-*.iso.sha256' \) \
+    -delete
+
+sudo cp -a "$RAM_OUT"/neoos-*.iso "$DISK_OUT"/
+sudo chown "$USER":"$(id -gn)" "$DISK_OUT"/neoos-*.iso
+
+echo
+echo "==> NeoOS build complete:"
+ls -lh "$DISK_OUT"/neoos-*.iso

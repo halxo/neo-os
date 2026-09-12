@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+if [[ "${1:-}" == repos ]]; then shift; fi
+exec /usr/lib/neo/configure-repositories "$@"

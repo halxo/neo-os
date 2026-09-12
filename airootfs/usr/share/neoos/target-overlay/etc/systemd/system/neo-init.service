@@ -1,0 +1,14 @@
+[Unit]
+Description=NeoOS repository initialization
+After=local-fs.target
+Before=NetworkManager.service
+ConditionPathExists=!/var/lib/neo/repositories-initialized
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/neo/init-repositories
+ExecStartPost=/usr/bin/mkdir -p /var/lib/neo
+ExecStartPost=/usr/bin/touch /var/lib/neo/repositories-initialized
+
+[Install]
+WantedBy=multi-user.target

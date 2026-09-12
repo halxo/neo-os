@@ -1,0 +1,42 @@
+# NeoOS GRUB Theme
+
+title-text: ""
+desktop-color: "#050805"
+
++ image {
+    left = 50%-110
+    top = 8%
+    width = 220
+    height = 220
+    file = "neoos.png"
+}
+
++ boot_menu {
+    left = 20%
+    top = 42%
+    width = 60%
+    height = 38%
+    item_color = "#d8e8d8"
+    selected_item_color = "#00ff66"
+    item_height = 36
+    item_padding = 8
+    item_spacing = 4
+}
+
++ label {
+    text = "NeoOS"
+    left = 0
+    top = 34%
+    width = 100%
+    align = "center"
+    color = "#00ff66"
+}
+
++ label {
+    text = "Booting in %d seconds"
+    left = 0
+    top = 88%
+    width = 100%
+    align = "center"
+    color = "#8fa88f"
+}

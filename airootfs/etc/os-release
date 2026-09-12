@@ -1,0 +1,11 @@
+NAME="NeoOS"
+PRETTY_NAME="NeoOS"
+ID=neoos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;60;150;255"
+HOME_URL="https://neoos.org/"
+DOCUMENTATION_URL="https://wiki.archlinux.org/"
+SUPPORT_URL="https://neoos.org/"
+BUG_REPORT_URL="https://neoos.org/"
+LOGO=neoos

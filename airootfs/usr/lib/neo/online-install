@@ -1,0 +1,100 @@
+#!/bin/bash
+set -euo pipefail
+
+TARGET="${1:-/tmp/neoos-online-test}"
+MODE="${2:-arch}"
+
+PACKAGE_LIST="/usr/share/neoos/install-packages.txt"
+
+if [[ ! -f "$PACKAGE_LIST" ]]; then
+    echo "ERROR: NeoOS install package list is missing: $PACKAGE_LIST"
+    exit 1
+fi
+
+mapfile -t INSTALL_PACKAGES < <(
+    grep -v "^[[:space:]]*$" "$PACKAGE_LIST" |
+    grep -v "^[[:space:]]*#"
+)
+
+case "$MODE" in
+    arch|cachyos)
+        ;;
+    *)
+        echo "ERROR: repository mode must be arch or cachyos"
+        exit 1
+        ;;
+esac
+
+if [[ ! -d "$TARGET" ]]; then
+    echo "ERROR: target does not exist: $TARGET"
+    exit 1
+fi
+
+NEO_PACKAGE="$(find /usr/share/neoos/packages     -maxdepth 1     -type f     -name "neo-*.pkg.tar.zst"     -print     -quit)"
+
+if [[ -z "$NEO_PACKAGE" ]]; then
+echo "ERROR: NeoOS package could not be found."
+exit 1
+fi
+
+TARGET_OVERLAY="/usr/share/neoos/target-overlay"
+
+if [[ ! -d "$TARGET_OVERLAY" ]]; then
+echo "ERROR: NeoOS target overlay is missing."
+exit 1
+fi
+
+PACMAN_CONFIG="$(mktemp /tmp/neoos-install-pacman.XXXXXX)"
+STAGING=""
+cleanup() {
+    rm -f "$PACMAN_CONFIG"
+    if [[ -n "$STAGING" ]]; then
+                rmdir "$STAGING"
+    fi
+}
+trap cleanup EXIT
+{
+    printf '[options]\nCheckSpace\nParallelDownloads = 5\nSigLevel = Required DatabaseOptional\n\n'
+    /usr/lib/neo/configure-repositories "$MODE" --print
+} > "$PACMAN_CONFIG"
+
+echo
+echo "Generated package configuration:"
+cat "$PACMAN_CONFIG"
+echo
+
+if [[ "${NEO_TEST_ONLY:-0}" == "1" ]]; then
+echo "TEST MODE: pacstrap was not executed."
+exit 0
+fi
+
+echo "Installing ${#INSTALL_PACKAGES[@]} NeoOS system packages..."
+
+pacstrap -C "$PACMAN_CONFIG" "$TARGET" "${INSTALL_PACKAGES[@]}"
+
+echo
+echo "Installing NeoOS system configuration..."
+
+# arch-chroot mounts a fresh tmpfs on /tmp, hiding files staged there.
+CHROOT_PACKAGE="/var/cache/neoos-install/neo.pkg.tar.zst"
+
+echo
+echo "Installing NeoOS system package..."
+install -Dm644 "$NEO_PACKAGE" "$TARGET/var/cache/neoos-install/neo.pkg.tar.zst"
+
+arch-chroot "$TARGET"     pacman -U --noconfirm "$CHROOT_PACKAGE"
+rm -f "$TARGET/var/cache/neoos-install/neo.pkg.tar.zst"
+
+# Apply after neo is installed so its older backend cannot overwrite our switcher.
+cp -a "$TARGET_OVERLAY"/. "$TARGET"/
+arch-chroot "$TARGET" /usr/lib/neo/configure-plasma-branding
+arch-chroot "$TARGET" pacman-key --init
+arch-chroot "$TARGET" pacman-key --populate archlinux cachyos
+
+echo
+echo "Configuring NeoOS repository mode: $MODE"
+
+arch-chroot "$TARGET"     /usr/lib/neo/configure-repositories "$MODE"
+
+echo
+echo "NeoOS base installation completed."

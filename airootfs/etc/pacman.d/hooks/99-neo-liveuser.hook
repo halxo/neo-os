@@ -1,0 +1,10 @@
+# remove from airootfs
+[Trigger]
+Operation = Install
+Type = Package
+Target = filesystem
+
+[Action]
+Description = Creating NeoOS live user...
+When = PostTransaction
+Exec = /usr/bin/bash -c 'id neo >/dev/null 2>&1 || useradd -m -U -G wheel,audio,video -s /bin/bash neo; passwd -d neo; mkdir -p /etc/sudoers.d; echo "neo ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/99-neo-live; chmod 440 /etc/sudoers.d/99-neo-live'

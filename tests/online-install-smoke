@@ -1,0 +1,40 @@
+#!/bin/bash
+# Run inside a user/mount namespace. Never pass a real installation target.
+set -euo pipefail
+PROFILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILT="${1:?Pass an existing mkarchiso airootfs path}"
+[[ $EUID == 0 ]] || { echo 'Run in a mapped root user/mount namespace.' >&2; exit 1; }
+SMOKE="$(mktemp -d "$PROFILE/work-install-smoke.XXXXXX")"
+LIVE="$SMOKE/live"
+mkdir -p "$LIVE"
+# Use arch-install-scripts' upstream unshare mount routine: rootless namespaces
+# cannot mount a new sysfs/devtmpfs. The package commands and /tmp tmpfs stay real.
+CHROOT="$SMOKE/arch-chroot"
+sed 's/setup=chroot_setup/setup=unshare_setup/' /usr/bin/arch-chroot > "$CHROOT"
+chmod +x "$CHROOT"
+cp -a --reflink=auto "$BUILT/." "$LIVE/"
+for command in arch-chroot pacstrap; do
+    sed -i 's/setup=chroot_setup/setup=unshare_setup/' "$LIVE/usr/bin/$command"
+done
+# Apply only current installer files; preserve the already built live system.
+cp "$PROFILE/airootfs/usr/lib/neo/online-install" "$LIVE/usr/lib/neo/online-install"
+cp "$PROFILE/airootfs/etc/pacman.d/hooks/neoos-plasma-branding.hook" "$LIVE/etc/pacman.d/hooks/"
+cp -a "$PROFILE/airootfs/usr/share/neoos/target-overlay/." "$LIVE/usr/share/neoos/target-overlay/"
+# The live system's resolved stub is not running in this disposable chroot.
+rm -f "$LIVE/etc/resolv.conf"
+cp -L /etc/resolv.conf "$LIVE/etc/resolv.conf"
+"$CHROOT" -r "$LIVE" pacman-key --init
+"$CHROOT" -r "$LIVE" pacman-key --populate archlinux cachyos
+for mode in arch cachyos; do
+    TARGET="/var/tmp/neoos-install-$mode"
+    mkdir -p "$LIVE$TARGET/var/cache/pacman/pkg"
+    cp --reflink=auto /var/cache/pacman/pkg/*.pkg.tar.zst "$LIVE$TARGET/var/cache/pacman/pkg/"
+    "$CHROOT" -r "$LIVE" /usr/lib/neo/online-install "$TARGET" "$mode"
+    "$CHROOT" -r "$LIVE$TARGET" pacman -Q neo
+    grep -qx "mode=$mode" "$LIVE$TARGET/etc/neo/repository-mode.conf"
+    grep -q 'neoosKickoff.writeConfig' "$LIVE$TARGET/usr/share/plasma/layout-templates/org.kde.plasma.desktop.defaultPanel/contents/layout.js"
+    [[ -f "$LIVE$TARGET/usr/share/icons/hicolor/512x512/apps/neoos.png" ]]
+    [[ -z "$(find "$LIVE$TARGET/var/cache/neoos-install" -mindepth 1 -print -quit)" ]]
+    echo "PASS: real $mode installation, Neo package, branding, mode and staging cleanup"
+done
+echo "Smoke-test files retained at $SMOKE"

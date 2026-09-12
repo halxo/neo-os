@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+LAYOUT=/usr/share/plasma/layout-templates/org.kde.plasma.desktop.defaultPanel/contents/layout.js
+ICON=/usr/share/icons/hicolor/512x512/apps/neoos.png
+[[ -f "$ICON" ]] || { echo "NeoOS launcher icon is missing: $ICON" >&2; exit 1; }
+[[ -f "$LAYOUT" ]] || { echo "Plasma default panel layout is missing: $LAYOUT" >&2; exit 1; }
+# Match only the uncustomized line so this remains safe to run after upgrades.
+sed -i '/^[[:space:]]*panel.addWidget("org.kde.plasma.kickoff")[;]*[[:space:]]*$/c\var neoosKickoff = panel.addWidget("org.kde.plasma.kickoff"); neoosKickoff.currentConfigGroup = ["General"]; neoosKickoff.writeConfig("icon", "/usr/share/icons/hicolor/512x512/apps/neoos.png");' "$LAYOUT"
+grep -q 'neoosKickoff.writeConfig' "$LAYOUT" || {
+    echo 'Could not apply NeoOS icon to the Plasma panel layout.' >&2
+    exit 1
+}
