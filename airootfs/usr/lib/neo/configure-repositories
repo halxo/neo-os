@@ -31,7 +31,7 @@ CPU_LEVEL="$(detect_cpu_level)"
 neoos_repo() {
     printf '[neoos]
 SigLevel = Optional TrustAll
-Server = https://raw.githubusercontent.com/halxo/neo-os/main/repo/$arch
+Server = https://halxo.github.io/neo-os/repo/$arch
 
 '
 }
