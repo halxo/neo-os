@@ -4,6 +4,10 @@ set -e
 DESKTOP="/usr/share/applications/calamares.desktop"
 
 if [[ -f "$DESKTOP" ]]; then
+    # Calamares ships translated launcher fields which override the generic
+    # NeoOS values under non-English locales. Remove those upstream labels so
+    # the installer has one consistent identity everywhere.
+    sed -i -E '/^(Name|GenericName|Comment|Icon)\[[^]]+\]=/d' "$DESKTOP"
     sed -i \
         -e 's/^Name=.*/Name=Neo Install/' \
         -e 's/^GenericName=.*/GenericName=NeoOS System Installer/' \

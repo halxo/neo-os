@@ -9,6 +9,11 @@ repo-add "$PROFILE/localrepo/neoos.db.tar.gz" "$PROFILE"/localrepo/*.pkg.tar.zst
 CONFIG="$(mktemp "$PROFILE/.build-pacman.XXXXXX")"
 trap 'rm -f "$CONFIG"' EXIT
 sed "s|@NEOOS_LOCAL_REPO@|$PROFILE/localrepo|g" "$PROFILE/pacman.conf" > "$CONFIG"
+EXPECTED_LOCAL_SERVER="Server = file://$PROFILE/localrepo"
+if ! grep -Fqx "$EXPECTED_LOCAL_SERVER" "$CONFIG"; then
+    echo "Local NeoOS repository was not configured correctly" >&2
+    exit 1
+fi
 # Fail early if the host has not imported the CachyOS signing keys.
 if [[ ! -f /usr/share/pacman/keyrings/cachyos.gpg ]]; then
     echo 'Install and populate cachyos-keyring on the build host first; see README.md.' >&2
