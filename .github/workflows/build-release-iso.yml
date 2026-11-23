@@ -1,0 +1,43 @@
+name: Build & Release NeoOS Gentoo ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish"
+        required: true
+        default: "v1.0-gentoo"
+  push:
+    tags:
+      - "v*-gentoo"
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build NeoOS Gentoo OpenRC Graphical Live ISO via Docker
+        run: ./tools/build-iso
+
+      - name: Generate SHA256 checksum
+        run: |
+          cd out
+          sha256sum neoos-gentoo-1.0-x86_64.iso > neoos-gentoo-1.0-x86_64.iso.sha256
+
+      - name: Publish GitHub Release with ISO, Docker Compose, and VirtualBox .bat
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --title "NeoOS 1.0 (Gentoo + OpenRC Graphical Live ISO)" \
+            --notes "VirtualBox-ready hybrid BIOS + UEFI Gentoo OpenRC Graphical Live Desktop ISO. Run neoos-virtualbox.bat on Windows to download/build and launch VirtualBox automatically." \
+            out/neoos-gentoo-1.0-x86_64.iso \
+            out/neoos-gentoo-1.0-x86_64.iso.sha256 \
+            neoos-virtualbox.bat \
+            docker-compose.yml

@@ -1,0 +1,67 @@
+FROM gentoo/stage3:amd64-openrc
+
+RUN cat > /etc/portage/make.conf <<'EOF'
+COMMON_FLAGS="-O2 -pipe"
+CFLAGS="${COMMON_FLAGS}"
+CXXFLAGS="${COMMON_FLAGS}"
+FCFLAGS="${COMMON_FLAGS}"
+FFLAGS="${COMMON_FLAGS}"
+MAKEOPTS="-j2"
+FEATURES="getbinpkg binpkg-request-signature parallel-fetch"
+EMERGE_DEFAULT_OPTS="--getbinpkg --binpkg-respect-use=n --jobs=4"
+ACCEPT_LICENSE="*"
+GRUB_PLATFORMS="efi-64 pc"
+EOF
+
+RUN mkdir -p /etc/portage/package.use && cat > /etc/portage/package.use/neoos-live <<'EOF'
+sys-kernel/installkernel dracut
+EOF
+
+RUN emerge-webrsync && \
+    eselect profile set default/linux/amd64/23.0/desktop
+
+# Layer 1: Disk, ISO, bootloader, and system utilities (binary packages)
+RUN emerge --getbinpkg --binpkg-respect-use=n --autounmask-continue --noreplace \
+    sys-block/parted \
+    sys-fs/dosfstools \
+    sys-fs/e2fsprogs \
+    sys-fs/btrfs-progs \
+    app-admin/sudo \
+    sys-apps/pciutils \
+    app-portage/cpuid2cpuflags \
+    net-misc/dhcpcd \
+    sys-boot/grub \
+    sys-fs/squashfs-tools \
+    dev-libs/libisoburn \
+    sys-fs/mtools
+
+# Layer 2a: Ensure elfutils binary is cached before kernel/dracut
+RUN mkdir -p /etc/portage/package.mask && \
+    echo "dev-libs/libelf" > /etc/portage/package.mask/no-libelf && \
+    emerge --getbinpkg --binpkg-respect-use=n --oneshot --nodeps dev-libs/elfutils
+
+# Layer 2b: Live Gentoo binary kernel + dracut
+RUN emerge --getbinpkg --binpkg-respect-use=n --usepkg-exclude=virtual/libelf --autounmask-continue --noreplace \
+    sys-kernel/installkernel \
+    sys-kernel/dracut \
+    sys-kernel/gentoo-kernel-bin
+
+# Layer 3: OpenRC desktop plumbing (dbus, elogind, NetworkManager)
+RUN emerge --getbinpkg --binpkg-respect-use=n --autounmask-continue --noreplace \
+    sys-auth/elogind \
+    sys-apps/dbus \
+    net-misc/networkmanager
+
+# Layer 4: Graphical live desktop (Xorg + Openbox + LightDM + GTK3)
+RUN emerge --getbinpkg --binpkg-respect-use=y --binpkg-changed-deps=n --autounmask-continue --noreplace \
+    x11-base/xorg-server \
+    x11-wm/openbox \
+    x11-terms/xterm \
+    x11-misc/lightdm \
+    x11-misc/lightdm-gtk-greeter \
+    gui-libs/display-manager-init \
+    dev-python/pygobject \
+    x11-libs/gtk+:3
+
+# Layer 5: Device-mapper (dmsetup) required by dracut dmsquash-live
+RUN emerge --getbinpkg --binpkg-respect-use=y --binpkg-changed-deps=n --noreplace sys-fs/lvm2

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# NeoOS Gentoo OpenRC CLI helper
+usage() {
+    cat <<'EOF'
+NeoOS (Gentoo + OpenRC) CLI
+
+Usage:
+  neo mode <binpkg|source>   Switch Portage between precompiled binhost and pure source (-march=native)
+  neo mode status            Show current Portage build mode
+  neo update                 Sync Portage and upgrade @world
+  neo kernel rebuild         Re-run hardware-tailored kernel autocompilation
+  neo desktops               List supported desktop environments
+EOF
+}
+
+MAKE_CONF="/etc/portage/make.conf"
+BINREPOS="/etc/portage/binrepos.conf/gentoobinhost.conf"
+
+cmd="${1:-help}"
+case "$cmd" in
+    mode)
+        sub="${2:-status}"
+        case "$sub" in
+            status)
+                if grep -q 'getbinpkg' "$MAKE_CONF" 2>/dev/null; then
+                    echo "NeoOS Portage mode: binpkg (precompiled Gentoo binhost enabled)"
+                else
+                    echo "NeoOS Portage mode: source (pure source compilation)"
+                fi
+                ;;
+            binpkg)
+                mkdir -p /etc/portage/binrepos.conf
+                cat > "$BINREPOS" <<'EOF'
+[gentoobinhost]
+priority = 1
+sync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64
+EOF
+                sed -i 's/COMMON_FLAGS=.*/COMMON_FLAGS="-O2 -pipe"/' "$MAKE_CONF"
+                grep -q 'getbinpkg' "$MAKE_CONF" || echo 'FEATURES="${FEATURES} getbinpkg binpkg-request-signature"' >> "$MAKE_CONF"
+                echo "Switched NeoOS to precompiled binhost mode."
+                ;;
+            source)
+                rm -f "$BINREPOS"
+                sed -i 's/COMMON_FLAGS=.*/COMMON_FLAGS="-march=native -O2 -pipe"/' "$MAKE_CONF"
+                sed -i 's/getbinpkg//g; s/binpkg-request-signature//g' "$MAKE_CONF"
+                echo "Switched NeoOS to pure source compilation mode (-march=native)."
+                ;;
+            *)
+                usage; exit 1 ;;
+        esac
+        ;;
+    update)
+        emerge-webrsync
+        emerge --update --deep --newuse @world
+        ;;
+    kernel)
+        if [[ "${2:-}" == "rebuild" ]]; then
+            python3 -c "from neo_installer.hardware import probe_hardware; from neo_installer.kernel import render_kernel_autocompile_script; print(render_kernel_autocompile_script(probe_hardware()))" | bash
+        else
+            usage; exit 1
+        fi
+        ;;
+    desktops)
+        python3 -c "from neo_installer.desktops import load_desktops
+for d in load_desktops():
+    print(f'{d.id:10s}  {d.name:22s}  [{d.category}]')"
+        ;;
+    *)
+        usage
+        ;;
+esac

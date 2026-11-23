@@ -1,24 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
-PROFILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-for tool in mkarchiso repo-add pacman-conf; do
-    command -v "$tool" >/dev/null || { echo "Missing build tool: $tool" >&2; exit 1; }
-done
-# Keep a self-contained, unsigned local repo; remote packages still require signatures.
-repo-add "$PROFILE/localrepo/neoos.db.tar.gz" "$PROFILE"/localrepo/*.pkg.tar.zst
-CONFIG="$(mktemp "$PROFILE/.build-pacman.XXXXXX")"
-trap 'rm -f "$CONFIG"' EXIT
-sed "s|@NEOOS_LOCAL_REPO@|$PROFILE/localrepo|g" "$PROFILE/pacman.conf" > "$CONFIG"
-EXPECTED_LOCAL_SERVER="Server = file://$PROFILE/localrepo"
-if ! grep -Fqx "$EXPECTED_LOCAL_SERVER" "$CONFIG"; then
-    echo "Local NeoOS repository was not configured correctly" >&2
+
+# Build the NeoOS Gentoo OpenRC Graphical Live ISO using cached Docker layers.
+REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: docker is required to build the NeoOS Gentoo Live ISO." >&2
     exit 1
 fi
-# Fail early if the host has not imported the CachyOS signing keys.
-if [[ ! -f /usr/share/pacman/keyrings/cachyos.gpg ]]; then
-    echo 'Install and populate cachyos-keyring on the build host first; see README.md.' >&2
-    exit 1
-fi
-# A unique work directory avoids stale mkarchiso stage markers after profile edits.
-WORK="$(mktemp -d "$PROFILE/work-build.XXXXXX")"
-mkarchiso -v -C "$CONFIG" -w "$WORK" -o "$PROFILE/out" "$@" "$PROFILE"
+
+echo "==> Building/updating neoos-gentoo-live:latest base image..."
+docker build -f "${REPO_DIR}/gentoo/Dockerfile.live" -t neoos-gentoo-live:latest "${REPO_DIR}"
+
+echo "==> Packing NeoOS Gentoo OpenRC Graphical Live ISO..."
+docker run --rm --privileged \
+    -e HOST_UID="$(id -u)" \
+    -e HOST_GID="$(id -g)" \
+    -v "${REPO_DIR}:/workspace" \
+    neoos-gentoo-live:latest \
+    bash /workspace/gentoo/pack-iso.sh /workspace
