@@ -3,9 +3,11 @@ setlocal enabledelayedexpansion
 
 title NeoOS (Gentoo + OpenRC) - Docker & VirtualBox Setup
 
-set "ISO_DIR=%~dp0out"
+set "WORK_DIR=%~dp0"
+set "ISO_DIR=%WORK_DIR%out"
 set "ISO_FILE=%ISO_DIR%\neoos-gentoo-1.0-x86_64.iso"
 set "ISO_URL=https://github.com/halxo/neo-os/releases/download/v1.0-gentoo/neoos-gentoo-1.0-x86_64.iso"
+set "REPO_ZIP_URL=https://github.com/halxo/neo-os/archive/refs/heads/main.zip"
 set "VM_NAME=NeoOS-Gentoo"
 set "VM_RAM=4096"
 set "VM_CPUS=4"
@@ -39,9 +41,12 @@ echo ==^> Downloading NeoOS Gentoo OpenRC ISO...
 echo     %ISO_URL%
 curl.exe -fL --progress-bar "%ISO_URL%" -o "%ISO_FILE%"
 if errorlevel 1 (
-    echo [ERROR] Download failed. Check your internet connection or try Option 2 ^(Docker build^).
-    pause
-    exit /b 1
+    if exist "%ISO_FILE%" del /f /q "%ISO_FILE%"
+    echo.
+    echo [WARN] Direct ISO download failed ^(release may still be building^).
+    set /p "FALLBACK=Fall back to local Docker build now? [Y/n]: "
+    if /i "!FALLBACK!"=="n" exit /b 1
+    goto :build_docker
 )
 goto :setup_vbox
 
@@ -54,15 +59,36 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+set "COMPOSE_DIR=%WORK_DIR%"
+if not exist "%COMPOSE_DIR%docker-compose.yml" (
+    echo ==^> docker-compose.yml not found next to .bat; fetching NeoOS Docker setup...
+    set "SRC_ZIP=%WORK_DIR%neo-os-main.zip"
+    curl.exe -fL --progress-bar "%REPO_ZIP_URL%" -o "!SRC_ZIP!"
+    if errorlevel 1 (
+        echo [ERROR] Failed to download NeoOS repository archive.
+        pause
+        exit /b 1
+    )
+    tar.exe -xf "!SRC_ZIP!" -C "%WORK_DIR%"
+    del /f /q "!SRC_ZIP!"
+    set "COMPOSE_DIR=%WORK_DIR%neo-os-main\"
+)
+
 echo ==^> Building NeoOS Gentoo OpenRC ISO via Docker Compose...
-pushd "%~dp0"
-docker compose run --rm build-iso
+pushd "%COMPOSE_DIR%"
+docker compose build build-iso && docker compose run --rm build-iso
 set "RC=%ERRORLEVEL%"
 popd
 if not "%RC%"=="0" (
     echo [ERROR] Docker ISO build failed ^(exit code %RC%^).
     pause
     exit /b %RC%
+)
+if not "%COMPOSE_DIR%"=="%WORK_DIR%" (
+    if exist "%COMPOSE_DIR%out\neoos-gentoo-1.0-x86_64.iso" (
+        copy /y "%COMPOSE_DIR%out\neoos-gentoo-1.0-x86_64.iso" "%ISO_FILE%" >nul
+    )
 )
 
 :setup_vbox
