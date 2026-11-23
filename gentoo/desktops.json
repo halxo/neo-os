@@ -1,0 +1,213 @@
+{
+  "desktops": [
+    {
+      "id": "kde",
+      "name": "KDE Plasma",
+      "category": "Full Desktop",
+      "description": "Feature-rich, customizable modern desktop powered by Qt (Wayland & X11).",
+      "profile": "default/linux/amd64/23.0/desktop/plasma",
+      "display_manager": "sddm",
+      "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager", "kde", "qt6"],
+      "packages": [
+        "kde-plasma/plasma-meta",
+        "kde-apps/konsole",
+        "kde-apps/dolphin",
+        "kde-apps/kate",
+        "x11-misc/sddm",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "gnome",
+      "name": "GNOME",
+      "category": "Full Desktop",
+      "description": "Clean, distraction-free modern desktop environment (configured for OpenRC + elogind).",
+      "profile": "default/linux/amd64/23.0/desktop/gnome",
+      "display_manager": "gdm",
+      "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager", "gnome", "gtk"],
+      "packages": [
+        "gnome-base/gnome-light",
+        "x11-terms/gnome-terminal",
+        "gnome-base/nautilus",
+        "gnome-base/gdm",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "xfce",
+      "name": "XFCE",
+      "category": "Lightweight Desktop",
+      "description": "Fast, stable, and lightweight traditional desktop environment.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "gtk"],
+      "packages": [
+        "x11-base/xorg-server",
+        "xfce-base/xfce4-meta",
+        "x11-terms/xfce4-terminal",
+        "xfce-extra/xfce4-notifyd",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "cinnamon",
+      "name": "Cinnamon",
+      "category": "Full Desktop",
+      "description": "Familiar, polished desktop with traditional taskbar layout.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "gtk"],
+      "packages": [
+        "x11-base/xorg-server",
+        "gnome-extra/cinnamon",
+        "x11-terms/gnome-terminal",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "mate",
+      "name": "MATE",
+      "category": "Lightweight Desktop",
+      "description": "Classic GNOME 2-style desktop that is fast and resource-friendly.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "gtk"],
+      "packages": [
+        "x11-base/xorg-server",
+        "mate-base/mate",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "lxqt",
+      "name": "LXQt",
+      "category": "Lightweight Desktop",
+      "description": "Ultra-lightweight Qt desktop environment ideal for older hardware and VMs.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "sddm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "qt6"],
+      "packages": [
+        "x11-base/xorg-server",
+        "lxqt-base/lxqt-meta",
+        "x11-misc/sddm",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "budgie",
+      "name": "Budgie",
+      "category": "Full Desktop",
+      "description": "Sleek, modern desktop with an integrated Raven sidebar and clean panel.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "gtk"],
+      "packages": [
+        "x11-base/xorg-server",
+        "gnome-extra/budgie-desktop",
+        "x11-terms/gnome-terminal",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "sway",
+      "name": "Sway",
+      "category": "Wayland Tiling WM",
+      "description": "i3-compatible Wayland compositor for keyboard-driven workflows.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "sddm",
+      "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager"],
+      "packages": [
+        "gui-wm/sway",
+        "gui-apps/foot",
+        "gui-apps/waybar",
+        "gui-apps/wofi",
+        "x11-misc/sddm",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "hyprland",
+      "name": "Hyprland",
+      "category": "Wayland Tiling WM",
+      "description": "Dynamic tiling Wayland compositor with smooth animations and modern visuals.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "sddm",
+      "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager"],
+      "packages": [
+        "gui-wm/hyprland",
+        "x11-terms/kitty",
+        "gui-apps/waybar",
+        "gui-apps/wofi",
+        "x11-misc/sddm",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "i3",
+      "name": "i3",
+      "category": "X11 Tiling WM",
+      "description": "Minimalist, fast X11 tiling window manager.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager"],
+      "packages": [
+        "x11-base/xorg-server",
+        "x11-wm/i3",
+        "x11-misc/i3status",
+        "x11-misc/dmenu",
+        "x11-terms/alacritty",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "openbox",
+      "name": "Openbox",
+      "category": "Lightweight WM",
+      "description": "Ultra-minimal X11 stacking window manager with tint2 panel.",
+      "profile": "default/linux/amd64/23.0/desktop",
+      "display_manager": "lightdm",
+      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager"],
+      "packages": [
+        "x11-base/xorg-server",
+        "x11-wm/openbox",
+        "x11-misc/tint2",
+        "x11-terms/xterm",
+        "x11-misc/lightdm",
+        "x11-misc/lightdm-gtk-greeter",
+        "gui-libs/display-manager-init"
+      ],
+      "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
+    },
+    {
+      "id": "minimal",
+      "name": "Minimal (CLI / Server)",
+      "category": "No Desktop",
+      "description": "Base Gentoo OpenRC system with custom-compiled kernel and networking only.",
+      "profile": "default/linux/amd64/23.0",
+      "display_manager": null,
+      "use_flags": ["dbus", "networkmanager"],
+      "packages": [],
+      "openrc_services": ["dbus", "NetworkManager"]
+    }
+  ]
+}

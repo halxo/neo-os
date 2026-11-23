@@ -1,0 +1,17 @@
+services:
+  build-iso:
+    build:
+      context: .
+      dockerfile: gentoo/Dockerfile.live
+    image: neoos-gentoo-live:latest
+    privileged: true
+    volumes:
+      - .:/workspace
+    command: ["bash", "/workspace/gentoo/pack-iso.sh", "/workspace"]
+
+  test:
+    image: python:3.12-slim
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command: ["python3", "tests/test_installer.py", "-v"]
