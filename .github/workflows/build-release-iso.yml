@@ -34,10 +34,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release create "$TAG" \
-            --title "NeoOS 1.0 (Gentoo + OpenRC Graphical Live ISO)" \
-            --notes "VirtualBox-ready hybrid BIOS + UEFI Gentoo OpenRC Graphical Live Desktop ISO. Run neoos-virtualbox.bat on Windows to download/build and launch VirtualBox automatically." \
-            out/neoos-gentoo-1.0-x86_64.iso \
-            out/neoos-gentoo-1.0-x86_64.iso.sha256 \
-            neoos-virtualbox.bat \
-            docker-compose.yml
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber \
+              out/neoos-gentoo-1.0-x86_64.iso \
+              out/neoos-gentoo-1.0-x86_64.iso.sha256 \
+              neoos-virtualbox.bat \
+              docker-compose.yml
+          else
+            gh release create "$TAG" \
+              --title "NeoOS 1.0 (Gentoo + OpenRC Graphical Live ISO)" \
+              --notes "VirtualBox-ready hybrid BIOS + UEFI Gentoo OpenRC Graphical Live Desktop ISO. Run neoos-virtualbox.bat on Windows to download/build and launch VirtualBox automatically." \
+              out/neoos-gentoo-1.0-x86_64.iso \
+              out/neoos-gentoo-1.0-x86_64.iso.sha256 \
+              neoos-virtualbox.bat \
+              docker-compose.yml
+          fi
