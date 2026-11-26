@@ -28,8 +28,21 @@ mkdir -p /etc/sudoers.d
 printf '%%wheel ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/99-neo-live
 chmod 440 /etc/sudoers.d/99-neo-live
 
-printf 'DISPLAYMANAGER="lightdm"\n' > /etc/conf.d/display-manager
+# Clear container rc_sys="docker" so OpenRC runs udev, devfs, sysfs, and desktop services
+sed -i 's/^rc_sys=.*/rc_sys=""/' /etc/rc.conf
+chmod -x /sbin/restorecon 2>/dev/null || true
+printf 'neoos\n' > /etc/hostname
+printf 'hostname="neoos"\n' > /etc/conf.d/hostname
+grep -q 'neoos' /etc/hosts || printf '127.0.0.1\tlocalhost neoos\n::1\t\tlocalhost neoos\n' > /etc/hosts
+
+cat > /etc/conf.d/display-manager <<'EOF'
+CHECKVT=7
+DISPLAYMANAGER="lightdm"
+EOF
 cat > /etc/lightdm/lightdm.conf <<'EOF'
+[LightDM]
+logind-check-graphical=false
+
 [Seat:*]
 autologin-user=neo
 autologin-user-timeout=0
@@ -44,23 +57,36 @@ sudo -E /usr/local/bin/neo-installer &
 EOF
 chown -R neo:neo /home/neo/.config
 
+# Disable fsck on live overlayfs root and enable desktop/network OpenRC services
+rc-update del fsck boot || true
+for svc in udev udev-trigger; do
+    rc-update add "$svc" sysinit || true
+done
 for svc in dbus elogind NetworkManager display-manager; do
     rc-update add "$svc" default || true
 done
 
-echo "==> [NeoOS Pack ISO] Building dracut live initramfs..."
+echo "==> [NeoOS Pack ISO] Building custom Gentoo OpenRC live initramfs..."
 KVER="$(ls -1 /lib/modules | sort -V | tail -n 1)"
 VMLINUZ="$(find /boot -maxdepth 1 -name 'vmlinuz-*' | sort -V | tail -n 1)"
-dracut --force --no-hostonly --kver "$KVER" \
-    --add "dmsquash-live pollcdrom" \
-    --filesystems "squashfs ext4 vfat iso9660 overlay" \
-    "$ISO_STAGING/boot/initramfs.img"
+bash "$WORKSPACE/gentoo/mk-live-initramfs.sh" "$KVER" "$ISO_STAGING/boot/initramfs.img"
 cp -a "$VMLINUZ" "$ISO_STAGING/boot/vmlinuz"
 
 echo "==> [NeoOS Pack ISO] Packing LiveOS squashfs image..."
+# Exclude container runtime files & caches, and recreate empty Linux mountpoint
+# directories via -p so switch_root and OpenRC boot cleanly.
 mksquashfs / "$ISO_STAGING/LiveOS/squashfs.img" \
     -comp lzo -b 1M -noappend \
-    -e proc sys dev run tmp mnt media var/tmp var/log var/cache/distfiles var/cache/binpkgs var/cache/binhost var/db/repos usr/share/doc usr/share/man usr/share/gtk-doc usr/include workspace
+    -e .dockerenv proc sys dev run tmp mnt media var/tmp var/log var/cache/distfiles var/cache/binpkgs var/cache/binhost var/db/repos usr/share/doc usr/share/man usr/share/gtk-doc usr/include workspace \
+    -p "proc d 555 0 0" \
+    -p "sys d 555 0 0" \
+    -p "dev d 755 0 0" \
+    -p "run d 755 0 0" \
+    -p "tmp d 1777 0 0" \
+    -p "mnt d 755 0 0" \
+    -p "media d 755 0 0" \
+    -p "var/tmp d 1777 0 0" \
+    -p "var/log d 755 0 0"
 
 echo "==> [NeoOS Pack ISO] Generating GRUB2 hybrid BIOS + UEFI ISO..."
 cat > "$ISO_STAGING/boot/grub/grub.cfg" <<EOF
@@ -68,12 +94,12 @@ set timeout=5
 set default=0
 
 menuentry "NeoOS Live (Gentoo + OpenRC Graphical Installer)" {
-    linux /boot/vmlinuz root=live:CDLABEL=${ISO_LABEL} rd.live.image rd.live.squashimg=squashfs.img quiet
+    linux /boot/vmlinuz console=tty0
     initrd /boot/initramfs.img
 }
 
 menuentry "NeoOS Live (Safe Graphics / VirtualBox nomodeset)" {
-    linux /boot/vmlinuz root=live:CDLABEL=${ISO_LABEL} rd.live.image rd.live.squashimg=squashfs.img nomodeset
+    linux /boot/vmlinuz nomodeset console=tty0
     initrd /boot/initramfs.img
 }
 EOF
