@@ -28,7 +28,17 @@ mkdir -p /etc/sudoers.d
 printf '%%wheel ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/99-neo-live
 chmod 440 /etc/sudoers.d/99-neo-live
 
-printf 'DISPLAYMANAGER="lightdm"\n' > /etc/conf.d/display-manager
+# Clear container rc_sys="docker" so OpenRC runs udev, devfs, sysfs, and desktop services
+sed -i 's/^rc_sys=.*/rc_sys=""/' /etc/rc.conf
+chmod -x /sbin/restorecon 2>/dev/null || true
+printf 'neoos\n' > /etc/hostname
+printf 'hostname="neoos"\n' > /etc/conf.d/hostname
+grep -q 'neoos' /etc/hosts || printf '127.0.0.1\tlocalhost neoos\n::1\t\tlocalhost neoos\n' > /etc/hosts
+
+cat > /etc/conf.d/display-manager <<'EOF'
+CHECKVT=7
+DISPLAYMANAGER="lightdm"
+EOF
 cat > /etc/lightdm/lightdm.conf <<'EOF'
 [LightDM]
 logind-check-graphical=false
@@ -49,6 +59,9 @@ chown -R neo:neo /home/neo/.config
 
 # Disable fsck on live overlayfs root and enable desktop/network OpenRC services
 rc-update del fsck boot || true
+for svc in udev udev-trigger; do
+    rc-update add "$svc" sysinit || true
+done
 for svc in dbus elogind NetworkManager display-manager; do
     rc-update add "$svc" default || true
 done
