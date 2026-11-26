@@ -23,7 +23,9 @@ install -m 755 "$WORKSPACE/tools/neo" /usr/local/bin/neo
 
 echo "==> [NeoOS Pack ISO] Configuring live user (neo) with graphical autologin..."
 id -u neo >/dev/null 2>&1 || useradd -m -G wheel,audio,video,input,plugdev -s /bin/bash neo
-printf 'root:neo\nneo:neo\n' | chpasswd
+NEO_HASH="$(openssl passwd -6 neo)"
+usermod -p "$NEO_HASH" root
+usermod -p "$NEO_HASH" neo
 mkdir -p /etc/sudoers.d
 printf '%%wheel ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/99-neo-live
 chmod 440 /etc/sudoers.d/99-neo-live
@@ -44,14 +46,17 @@ cat > /etc/lightdm/lightdm.conf <<'EOF'
 logind-check-graphical=false
 
 [Seat:*]
+greeter-session=lightdm-gtk-greeter
+session-wrapper=/etc/lightdm/Xsession
 autologin-user=neo
 autologin-user-timeout=0
+autologin-session=openbox
 user-session=openbox
 EOF
 
 mkdir -p /home/neo/.config/openbox
 cat > /home/neo/.config/openbox/autostart <<'EOF'
-xsetroot -solid "#141824" &
+command -v xsetroot >/dev/null 2>&1 && xsetroot -solid "#141824" &
 xterm -title "NeoOS Terminal" &
 sudo -E /usr/local/bin/neo-installer &
 EOF
