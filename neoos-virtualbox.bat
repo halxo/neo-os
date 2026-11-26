@@ -12,7 +12,8 @@ set "VM_NAME=NeoOS-Gentoo"
 set "VM_RAM=4096"
 set "VM_CPUS=4"
 set "VM_VRAM=128"
-set "VM_DISK_MB=32768"
+set "VM_DISK_MB=51200"
+set "SHA_URL=https://github.com/halxo/neo-os/releases/download/v1.0-gentoo/neoos-gentoo-1.0-x86_64.iso.sha256"
 
 echo ============================================================
 echo   NeoOS (Gentoo + OpenRC) - VirtualBox ^& Docker Launcher
@@ -22,7 +23,18 @@ echo.
 if not exist "%ISO_DIR%" mkdir "%ISO_DIR%"
 
 if exist "%ISO_FILE%" (
-    echo [OK] Found existing ISO: "%ISO_FILE%"
+    set "REMOTE_SHA="
+    set "LOCAL_SHA="
+    for /f "tokens=1" %%S in ('curl.exe -fsSL "%SHA_URL%" 2^>nul') do set "REMOTE_SHA=%%S"
+    if defined REMOTE_SHA (
+        for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '%ISO_FILE%').Hash.ToLower()" 2^>nul`) do set "LOCAL_SHA=%%H"
+        if defined LOCAL_SHA if /i not "!LOCAL_SHA!"=="!REMOTE_SHA!" (
+            echo [UPDATE] A newer NeoOS ISO release is available on GitHub. Updating local ISO...
+            del /f /q "%ISO_FILE%"
+            goto :download_iso
+        )
+    )
+    echo [OK] Found up-to-date ISO: "%ISO_FILE%"
     goto :setup_vbox
 )
 
@@ -111,6 +123,8 @@ echo ==^> Configuring VirtualBox VM "%VM_NAME%"...
 "%VBOXMANAGE%" showvminfo "%VM_NAME%" >nul 2>&1
 if not errorlevel 1 (
     echo [INFO] VM "%VM_NAME%" already exists. Updating DVD ISO attachment and starting...
+    "%VBOXMANAGE%" controlvm "%VM_NAME%" poweroff >nul 2>&1
+    timeout /t 2 /nobreak >nul 2>&1
     "%VBOXMANAGE%" storageattach "%VM_NAME%" --storagectl "IDE" --port 0 --device 0 --type dvddrive --medium "%ISO_FILE%"
     goto :start_vm
 )

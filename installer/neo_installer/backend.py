@@ -42,7 +42,7 @@ def render_make_conf(hw: HardwareProfile, desktop: DesktopOption, install_mode: 
     features = "getbinpkg binpkg-request-signature parallel-fetch" if install_mode == "binpkg" else "parallel-fetch"
     emerge_opts = f"--jobs={hw.makeopts_jobs} --load-average={hw.cpu_cores}"
     if install_mode == "binpkg":
-        emerge_opts += " --getbinpkg"
+        emerge_opts += " --getbinpkg --binpkg-respect-use=n"
 
     use_flags = sorted(set(desktop.use_flags + ["-systemd", "elogind", "policykit", "udev"]))
     video_cards = " ".join(hw.video_cards)
@@ -72,7 +72,7 @@ GRUB_PLATFORMS="efi-64 pc"
 def render_binrepos_conf() -> str:
     return f"""[gentoobinhost]
 priority = 1
-sync-uri = {BINHOST_URL}/
+sync-uri = {BINHOST_URL}
 """
 
 
@@ -98,7 +98,11 @@ def render_chroot_install_script(
     desktop: DesktopOption,
 ) -> str:
     """Build the chroot provisioning script that installs OpenRC, kernel, desktop, and GRUB."""
-    emerge_flags = "--getbinpkg" if cfg.install_mode == "binpkg" else ""
+    emerge_flags = (
+        "--getbinpkg --binpkg-respect-use=n --usepkg-exclude=virtual/libelf"
+        if cfg.install_mode == "binpkg"
+        else ""
+    )
     extra_pkgs: List[str] = [
         "app-admin/sudo",
         "app-admin/sysklogd",
@@ -130,14 +134,46 @@ def render_chroot_install_script(
         f"rc-update add {shlex.quote(svc)} default || true" for svc in services
     )
 
+    overlay_block = ""
+    if desktop.overlay_name and desktop.overlay_tarball_url:
+        ov_name = shlex.quote(desktop.overlay_name)
+        ov_url = shlex.quote(desktop.overlay_tarball_url)
+        overlay_block = f"""
+echo "==> [NeoOS] Configuring Portage overlay {desktop.overlay_name} for {desktop.name}..."
+mkdir -p /var/db/repos/{ov_name} /etc/portage/repos.conf
+curl --retry 3 -fsSL {ov_url} | tar xzf - --strip-components=1 -C /var/db/repos/{ov_name}
+cat > /etc/portage/repos.conf/{ov_name}.conf <<'OVERLAY_EOF'
+[{desktop.overlay_name}]
+location = /var/db/repos/{desktop.overlay_name}
+OVERLAY_EOF
+"""
+
+    pkg_use_lines = ["net-libs/ngtcp2 gnutls", "sys-kernel/installkernel dracut grub"] + list(desktop.package_use)
+    pkg_use_text = "\\n".join(pkg_use_lines) + "\\n"
+
+    kw_block = ""
+    if desktop.accept_keywords:
+        kw_text = "\\n".join(desktop.accept_keywords) + "\\n"
+        kw_block = f"mkdir -p /etc/portage/package.accept_keywords\nprintf '{kw_text}' > /etc/portage/package.accept_keywords/10-desktop\n"
+
     dm_config = ""
     if desktop.display_manager:
-        dm_config = f'printf \'DISPLAYMANAGER="{desktop.display_manager}"\\n\' > /etc/conf.d/display-manager\n'
+        dm_config = (
+            f'printf \'CHECKVT=7\\nDISPLAYMANAGER="{desktop.display_manager}"\\n\' > /etc/conf.d/display-manager\n'
+        )
+        if desktop.display_manager == "lightdm":
+            dm_config += (
+                "if [[ -f /etc/lightdm/lightdm.conf ]]; then\n"
+                "    sed -i 's/^#\\?logind-check-graphical=.*/logind-check-graphical=false/' /etc/lightdm/lightdm.conf\n"
+                "fi\n"
+            )
 
     if hw.firmware == "uefi":
         grub_install = (
             "grub-install --target=x86_64-efi --efi-directory=/boot/efi "
-            "--bootloader-id=NeoOS --removable"
+            "--bootloader-id=NeoOS --removable || "
+            "grub-install --target=x86_64-efi --efi-directory=/boot/efi "
+            "--bootloader-id=NeoOS --removable --no-nvram"
         )
     else:
         grub_install = f"grub-install --target=i386-pc {shlex.quote(cfg.target_disk)}"
@@ -146,41 +182,55 @@ def render_chroot_install_script(
 set -euo pipefail
 source /etc/profile
 
+mkdir -p /etc/portage/package.mask /etc/portage/package.use
+echo "dev-libs/libelf" > /etc/portage/package.mask/00-no-libelf
+printf '{pkg_use_text}' > /etc/portage/package.use/00-neoos-base
+{kw_block}
 echo "==> [NeoOS] Syncing Gentoo Portage tree..."
 emerge-webrsync
-
+{overlay_block}
 echo "==> [NeoOS] Selecting OpenRC profile: {desktop.profile}"
 eselect profile set {shlex.quote(desktop.profile)}
 
 echo "==> [NeoOS] Configuring timezone ({cfg.timezone}) and locale ({cfg.locale})..."
 echo {shlex.quote(cfg.timezone)} > /etc/timezone
 emerge --config sys-libs/timezone-data
-echo "{cfg.locale} UTF-8" >> /etc/locale.gen
+grep -qF "{cfg.locale} UTF-8" /etc/locale.gen 2>/dev/null || echo "{cfg.locale} UTF-8" >> /etc/locale.gen
 locale-gen
 eselect locale set {shlex.quote(cfg.locale)} || true
 env-update && source /etc/profile
 
 echo "==> [NeoOS] Setting hostname to {cfg.hostname}..."
+sed -i 's/^rc_sys=.*/rc_sys=""/' /etc/rc.conf 2>/dev/null || true
+chmod -x /sbin/restorecon 2>/dev/null || true
+printf '%s\\n' {shlex.quote(cfg.hostname)} > /etc/hostname
 printf 'hostname="%s"\\n' {shlex.quote(cfg.hostname)} > /etc/conf.d/hostname
-
-echo "==> [NeoOS] Installing base system and {desktop.name} ({cfg.install_mode} mode)..."
-emerge {emerge_flags} --update --deep --newuse {pkgs_str}
+printf '127.0.0.1\\tlocalhost %s\\n::1\\t\\tlocalhost %s\\n' {shlex.quote(cfg.hostname)} {shlex.quote(cfg.hostname)} > /etc/hosts
 
 echo "==> [NeoOS] Autocompiling hardware-tailored kernel..."
 bash /tmp/neoos-build-kernel.sh
 
+echo "==> [NeoOS] Installing base system and {desktop.name} ({cfg.install_mode} mode)..."
+emerge {emerge_flags} --autounmask-continue --autounmask-backtrack=y --update --deep --newuse {pkgs_str}
+
 echo "==> [NeoOS] Creating user {cfg.username} and configuring sudo..."
 id -u {shlex.quote(cfg.username)} >/dev/null 2>&1 || useradd -m -G wheel,audio,video,usb,plugdev,input -s /bin/bash {shlex.quote(cfg.username)}
-printf '%s:%s\\n' root {shlex.quote(cfg.root_password)} | chpasswd
-printf '%s:%s\\n' {shlex.quote(cfg.username)} {shlex.quote(cfg.user_password)} | chpasswd
+ROOT_HASH="$(openssl passwd -6 {shlex.quote(cfg.root_password)})"
+USER_HASH="$(openssl passwd -6 {shlex.quote(cfg.user_password)})"
+usermod -p "$ROOT_HASH" root
+usermod -p "$USER_HASH" {shlex.quote(cfg.username)}
 mkdir -p /etc/sudoers.d
 printf '%%wheel ALL=(ALL:ALL) ALL\\n' > /etc/sudoers.d/10-wheel
 chmod 440 /etc/sudoers.d/10-wheel
 
 echo "==> [NeoOS] Enabling OpenRC services..."
+for svc in udev udev-trigger; do
+    rc-update add "$svc" sysinit || true
+done
 {dm_config}{rc_lines}
 
 echo "==> [NeoOS] Installing GRUB bootloader ({hw.firmware})..."
+mkdir -p /boot/grub
 {grub_install}
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -199,9 +249,20 @@ class GentooInstaller:
         self.cfg = config
         self.hw = hardware or probe_hardware()
         self.desktop = get_desktop(config.desktop_id)
-        self.log = log_callback or print
+        self._user_log = log_callback or print
         self.progress = progress_callback or (lambda pct, msg: None)
         self.executed_commands: List[List[str]] = []
+        self._log_file = pathlib.Path("/var/log/neo-installer.log")
+
+    def log(self, line: str) -> None:
+        self._user_log(line)
+        if not self.cfg.dry_run:
+            try:
+                self._log_file.parent.mkdir(parents=True, exist_ok=True)
+                with self._log_file.open("a", encoding="utf-8") as fh:
+                    fh.write(line + "\n")
+            except OSError:
+                pass
 
     def _exec(self, cmd: List[str]) -> None:
         self.executed_commands.append(cmd)
@@ -227,6 +288,7 @@ class GentooInstaller:
         mnt = pathlib.Path(self.cfg.mount_point)
 
         self.progress(0.05, "Partitioning target disk...")
+        self._prepare_clean_mounts(mnt)
         self._partition_and_format(parts)
 
         self.progress(0.15, "Mounting target filesystems...")
@@ -241,6 +303,9 @@ class GentooInstaller:
         self.progress(0.55, "Running chroot install (Portage, kernel autocompile, desktop, GRUB)...")
         self._run_chroot(mnt)
 
+        if not self.cfg.dry_run:
+            subprocess.run(["sync"], check=False)
+
         self.progress(1.0, "NeoOS Gentoo OpenRC installation complete!")
         return {
             "disk": self.cfg.target_disk,
@@ -250,6 +315,15 @@ class GentooInstaller:
             "firmware": self.hw.firmware,
             "commands_count": len(self.executed_commands),
         }
+
+    def _prepare_clean_mounts(self, mnt: pathlib.Path) -> None:
+        """Best-effort cleanup of any previous partial install mounts/swap on the target."""
+        if self.cfg.dry_run:
+            return
+        subprocess.run(["swapoff", "-a"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if mnt.exists():
+            subprocess.run(["umount", "-R", str(mnt)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["umount", "-l", str(mnt)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _partition_and_format(self, parts: dict) -> None:
         disk = self.cfg.target_disk
@@ -270,10 +344,14 @@ class GentooInstaller:
         else:
             self._exec(["parted", "-s", disk, "mkpart", "root", self.cfg.filesystem, boot_end, "100%"])
 
+        if not self.cfg.dry_run:
+            subprocess.run(["partprobe", disk], check=False)
+            subprocess.run(["udevadm", "settle"], check=False)
+
         if self.hw.firmware == "uefi":
             self._exec(["mkfs.vfat", "-F", "32", parts["boot"]])
         if self.cfg.enable_swap and parts["swap"]:
-            self._exec(["mkswap", parts["swap"]])
+            self._exec(["mkswap", "-f", parts["swap"]])
             self._exec(["swapon", parts["swap"]])
         if self.cfg.filesystem == "btrfs":
             self._exec(["mkfs.btrfs", "-f", parts["root"]])
@@ -293,14 +371,15 @@ class GentooInstaller:
     def _extract_stage3(self, mnt: pathlib.Path) -> None:
         cached = pathlib.Path("/usr/share/neoos/stage3-amd64-openrc.tar.xz")
         if cached.is_file():
-            self._exec(["tar", "xpvf", str(cached), "--xattrs-include=*.*", "--numeric-owner", "-C", str(mnt)])
+            self._exec(["tar", "xpf", str(cached), "--xattrs-include=*.*", "--numeric-owner", "-C", str(mnt)])
             return
         dl_cmd = (
-            f"LATEST=$(curl -fsSL {STAGE3_BASE_URL}/latest-stage3-amd64-openrc.txt "
-            "| awk '/stage3-amd64-openrc-.*\\.tar\\.xz/{print $1; exit}') && "
-            f"curl -fL {STAGE3_BASE_URL}/$LATEST -o /tmp/stage3.tar.xz && "
-            f"tar xpvf /tmp/stage3.tar.xz --xattrs-include='*.*' --numeric-owner -C {shlex.quote(str(mnt))} && "
-            "rm -f /tmp/stage3.tar.xz"
+            f"LATEST=$(curl --retry 3 -fsSL {STAGE3_BASE_URL}/latest-stage3-amd64-openrc.txt "
+            "| awk '/stage3-amd64-openrc-[0-9T]+Z\\.tar\\.xz/{print $1; exit}') && "
+            "test -n \"$LATEST\" && "
+            f"curl --retry 3 -fL {STAGE3_BASE_URL}/$LATEST -o {shlex.quote(str(mnt))}/stage3.tar.xz && "
+            f"tar xpf {shlex.quote(str(mnt))}/stage3.tar.xz --xattrs-include='*.*' --numeric-owner -C {shlex.quote(str(mnt))} && "
+            f"rm -f {shlex.quote(str(mnt))}/stage3.tar.xz"
         )
         self._exec(["bash", "-euo", "pipefail", "-c", dl_cmd])
 
@@ -323,9 +402,12 @@ class GentooInstaller:
 
         (mnt / "etc" / "portage").mkdir(parents=True, exist_ok=True)
         (mnt / "etc" / "portage" / "make.conf").write_text(make_conf, encoding="utf-8")
+        binrepos_dir = mnt / "etc" / "portage" / "binrepos.conf"
+        binrepos_dir.mkdir(parents=True, exist_ok=True)
+        for existing in binrepos_dir.glob("*.conf"):
+            existing.unlink(missing_ok=True)
         if self.cfg.install_mode == "binpkg":
-            (mnt / "etc" / "portage" / "binrepos.conf").mkdir(parents=True, exist_ok=True)
-            (mnt / "etc" / "portage" / "binrepos.conf" / "gentoobinhost.conf").write_text(
+            (binrepos_dir / "gentoobinhost.conf").write_text(
                 render_binrepos_conf(), encoding="utf-8"
             )
         (mnt / "etc" / "fstab").write_text("\n".join(fstab_lines) + "\n", encoding="utf-8")

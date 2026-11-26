@@ -67,7 +67,11 @@ def render_kernel_autocompile_script(
       6. If any step of localmodconfig/gentoo-sources fails, automatically fall back to
          compiling `sys-kernel/gentoo-kernel` from source so the system always boots.
     """
-    emerge_flags = "--getbinpkg" if install_mode == "binpkg" else ""
+    emerge_flags = (
+        "--getbinpkg --binpkg-respect-use=n --usepkg-exclude=virtual/libelf --autounmask-continue --autounmask-backtrack=y"
+        if install_mode == "binpkg"
+        else "--autounmask-continue --autounmask-backtrack=y"
+    )
     extra_opts = list(REQUIRED_KERNEL_OPTIONS)
     if hw.hypervisor in ("virtualbox", "vmware", "kvm"):
         extra_opts.extend(VIRTUALBOX_KERNEL_OPTIONS)
@@ -85,51 +89,67 @@ set -euo pipefail
 JOBS="{hw.makeopts_jobs}"
 LSMOD_FILE="{lsmod_path}"
 
-echo "==> [NeoOS Kernel] Installing firmware, dracut, and gentoo-sources..."
-emerge {emerge_flags} --noreplace sys-kernel/linux-firmware sys-kernel/dracut sys-kernel/gentoo-sources
+mkdir -p /etc/portage/package.mask /etc/portage/package.use
+echo "dev-libs/libelf" > /etc/portage/package.mask/00-no-libelf
+printf 'sys-kernel/installkernel dracut grub\\n' > /etc/portage/package.use/00-neoos-kernel
 
-build_localmodconfig_kernel() {{
-    echo "==> [NeoOS Kernel] Auto-configuring kernel for this hardware (localmodconfig)..."
-    eselect kernel set 1
-    cd /usr/src/linux
+echo "==> [NeoOS Kernel] Installing kernel build toolchain, firmware, dracut, and gentoo-sources..."
+emerge {emerge_flags} --oneshot --nodeps dev-libs/elfutils || true
+emerge {emerge_flags} --noreplace \\
+    sys-devel/bc sys-devel/bison sys-devel/flex dev-libs/openssl \\
+    sys-kernel/installkernel sys-kernel/linux-firmware sys-kernel/dracut sys-kernel/gentoo-sources
 
-    if [[ -r /proc/config.gz ]]; then
-        zcat /proc/config.gz > .config
-    elif [[ -r /boot/config-live ]]; then
-        cp /boot/config-live .config
-    else
-        make defconfig
-    fi
+cat > /tmp/neoos-compile-localmod.sh <<'LOCALMOD_EOF'
+#!/bin/bash
+set -euo pipefail
 
-    if [[ -s "$LSMOD_FILE" ]]; then
-        yes "" | make LSMOD="$LSMOD_FILE" localmodconfig
-    else
-        yes "" | make localmodconfig
-    fi
+JOBS="{hw.makeopts_jobs}"
+LSMOD_FILE="{lsmod_path}"
 
-    echo "==> [NeoOS Kernel] Enforcing required boot, filesystem, and VM drivers..."
+echo "==> [NeoOS Kernel] Auto-configuring kernel for this hardware (localmodconfig)..."
+eselect kernel set 1
+cd /usr/src/linux
+
+LIVE_CFG="$(ls -1 /boot/config-* 2>/dev/null | head -n 1 || true)"
+if [[ -r /proc/config.gz ]]; then
+    zcat /proc/config.gz > .config
+elif [[ -n "$LIVE_CFG" && -r "$LIVE_CFG" ]]; then
+    cp "$LIVE_CFG" .config
+else
+    make defconfig
+fi
+
+if [[ -s "$LSMOD_FILE" ]]; then
+    yes "" | make LSMOD="$LSMOD_FILE" localmodconfig
+else
+    yes "" | make localmodconfig
+fi
+
+echo "==> [NeoOS Kernel] Enforcing required boot, filesystem, and VM drivers..."
 {tweaks_block}
-    yes "" | make olddefconfig
+yes "" | make olddefconfig
 
-    echo "==> [NeoOS Kernel] Compiling custom kernel with -j${{JOBS}}..."
-    make -j"${{JOBS}}"
-    make modules_install
-    make install
+echo "==> [NeoOS Kernel] Compiling custom kernel with -j${{JOBS}}..."
+make -j"${{JOBS}}"
+make modules_install
+make install
 
-    KVER="$(make -s kernelrelease)"
-    echo "==> [NeoOS Kernel] Generating dracut initramfs for ${{KVER}}..."
-    dracut --force --kver "${{KVER}}" "/boot/initramfs-${{KVER}}.img"
-    echo "==> [NeoOS Kernel] Custom hardware kernel ${{KVER}} built successfully."
-}}
+KVER="$(make -s kernelrelease)"
+echo "==> [NeoOS Kernel] Generating dracut initramfs for ${{KVER}}..."
+dracut --force --kver "${{KVER}}" --no-hostonly "/boot/initramfs-${{KVER}}.img"
+echo "==> [NeoOS Kernel] Custom hardware kernel ${{KVER}} built successfully."
+LOCALMOD_EOF
+chmod +x /tmp/neoos-compile-localmod.sh
 
 fallback_gentoo_kernel() {{
-    echo "==> [NeoOS Kernel] WARNING: localmodconfig build failed; falling back to sys-kernel/gentoo-kernel (compiled from source)..."
-    # Compile gentoo-kernel from source (without --getbinpkg) so it still optimizes for this CPU.
-    USE="initramfs" emerge --noreplace sys-kernel/gentoo-kernel
-    echo "==> [NeoOS Kernel] Fallback sys-kernel/gentoo-kernel installed successfully."
+    echo "==> [NeoOS Kernel] WARNING: localmodconfig build failed; falling back to sys-kernel/gentoo-kernel..."
+    if ! USE="initramfs" emerge --autounmask-continue --autounmask-backtrack=y --noreplace sys-kernel/gentoo-kernel; then
+        echo "==> [NeoOS Kernel] WARNING: source gentoo-kernel failed; installing sys-kernel/gentoo-kernel-bin so system is guaranteed bootable..."
+        emerge --getbinpkg --binpkg-respect-use=n --autounmask-continue --noreplace sys-kernel/gentoo-kernel-bin
+    fi
 }}
 
-if ! build_localmodconfig_kernel; then
+if ! /tmp/neoos-compile-localmod.sh; then
     fallback_gentoo_kernel
 fi
 """

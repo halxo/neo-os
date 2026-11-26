@@ -13,7 +13,7 @@
         "kde-apps/konsole",
         "kde-apps/dolphin",
         "kde-apps/kate",
-        "x11-misc/sddm",
+        "gui-apps/sddm",
         "gui-libs/display-manager-init"
       ],
       "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
@@ -100,7 +100,7 @@
       "packages": [
         "x11-base/xorg-server",
         "lxqt-base/lxqt-meta",
-        "x11-misc/sddm",
+        "gui-apps/sddm",
         "gui-libs/display-manager-init"
       ],
       "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
@@ -110,12 +110,23 @@
       "name": "Budgie",
       "category": "Full Desktop",
       "description": "Sleek, modern desktop with an integrated Raven sidebar and clean panel.",
-      "profile": "default/linux/amd64/23.0/desktop",
+      "profile": "default/linux/amd64/23.0/desktop/gnome",
       "display_manager": "lightdm",
-      "use_flags": ["elogind", "dbus", "X", "pulseaudio", "pipewire", "networkmanager", "gtk"],
+      "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager", "gtk", "vala"],
+      "overlay_name": "SarahMiaOverlay",
+      "overlay_tarball_url": "https://gitlab.com/SarahMia/sarahmiaoverlay/-/archive/master/sarahmiaoverlay-master.tar.gz",
+      "accept_keywords": ["*/*::SarahMiaOverlay ~amd64", "gui-wm/labwc ~amd64", "dev-cpp/toml11 ~amd64"],
+      "package_use": [
+        "gui-apps/swaybg gdk-pixbuf",
+        "net-libs/ngtcp2 gnutls",
+        "sys-apps/accountsservice vala",
+        "gui-libs/gtk-layer-shell vala",
+        "xfce-base/libxfce4windowing vala",
+        "dev-libs/libpeas vala"
+      ],
       "packages": [
         "x11-base/xorg-server",
-        "gnome-extra/budgie-desktop",
+        "budgie-base/budgie-desktop",
         "x11-terms/gnome-terminal",
         "x11-misc/lightdm",
         "x11-misc/lightdm-gtk-greeter",
@@ -136,7 +147,7 @@
         "gui-apps/foot",
         "gui-apps/waybar",
         "gui-apps/wofi",
-        "x11-misc/sddm",
+        "gui-apps/sddm",
         "gui-libs/display-manager-init"
       ],
       "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]
@@ -149,12 +160,15 @@
       "profile": "default/linux/amd64/23.0/desktop",
       "display_manager": "sddm",
       "use_flags": ["elogind", "dbus", "wayland", "X", "pulseaudio", "pipewire", "networkmanager"],
+      "overlay_name": "hyproverlay",
+      "overlay_tarball_url": "https://codeberg.org/hyproverlay/hyproverlay/archive/main.tar.gz",
+      "accept_keywords": ["*/*::hyproverlay ~amd64"],
       "packages": [
-        "gui-wm/hyprland",
+        "gui-wm/hyprland::hyproverlay",
         "x11-terms/kitty",
-        "gui-apps/waybar",
+        "gui-apps/waybar::gentoo",
         "gui-apps/wofi",
-        "x11-misc/sddm",
+        "gui-apps/sddm",
         "gui-libs/display-manager-init"
       ],
       "openrc_services": ["dbus", "elogind", "NetworkManager", "display-manager"]

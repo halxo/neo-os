@@ -235,6 +235,8 @@ def run_gui(dry_run: bool = False) -> int:
         def _append_log(self, text: str) -> None:
             buf = self.log_view.get_buffer()
             buf.insert(buf.get_end_iter(), text + "\n")
+            mark = buf.create_mark(None, buf.get_end_iter(), False)
+            self.log_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
 
         def _start_install(self) -> None:
             cfg = InstallConfig(
@@ -264,6 +266,7 @@ def run_gui(dry_run: bool = False) -> int:
                     installer.run()
                     GLib.idle_add(self._on_done, True, "Installation finished! You may now reboot.")
                 except Exception as exc:
+                    GLib.idle_add(self._append_log, f"\n[ERROR] {exc} (full log: /var/log/neo-installer.log)")
                     GLib.idle_add(self._on_done, False, f"Installation failed: {exc}")
 
             threading.Thread(target=worker, daemon=True).start()
@@ -275,6 +278,8 @@ def run_gui(dry_run: bool = False) -> int:
         def _on_done(self, ok: bool, msg: str) -> None:
             self.status_label.set_text(msg)
             self.next_btn.set_sensitive(True)
+            if not ok:
+                self.back_btn.set_sensitive(True)
 
     win = NeoInstallerWindow()
     win.connect("destroy", Gtk.main_quit)

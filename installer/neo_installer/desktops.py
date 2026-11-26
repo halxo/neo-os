@@ -18,6 +18,10 @@ class DesktopOption:
     use_flags: List[str]
     packages: List[str]
     openrc_services: List[str]
+    overlay_name: Optional[str] = None
+    overlay_tarball_url: Optional[str] = None
+    accept_keywords: List[str] = dataclasses.field(default_factory=list)
+    package_use: List[str] = dataclasses.field(default_factory=list)
 
 
 def _default_catalog_path() -> pathlib.Path:
